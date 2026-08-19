@@ -32,9 +32,9 @@ export default function OrderTrackPage() {
     fetch(`/api/orders/${id}`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
-        if (data) {
+        if (data && data.nomor_meja && data.nomor_meja !== '-') {
           setO(data);
-          localStorage.setItem(`zcorner_order_${id}`, JSON.stringify(data));
+          try { localStorage.setItem(`zcorner_order_${id}`, JSON.stringify(data)); } catch {}
         }
       })
       .finally(() => setLoading(false));

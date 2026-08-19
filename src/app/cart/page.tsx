@@ -60,6 +60,28 @@ export default function CartPage() {
       if (res.ok) {
         const data = await res.json();
         const orderId = data.orderId || data.id || ('ORD-' + Date.now());
+
+        const fullOrderObj = {
+          id: orderId,
+          nomor_meja: meja,
+          tenant: { nama_tenant: cart.tenant_name },
+          status: 'diterima',
+          total_harga: cartTotal(cart),
+          metode_bayar: 'COD',
+          payment_status: 'belum_lunas',
+          created_at: new Date().toISOString(),
+          items: cart.items.map((i) => ({
+            qty: i.qty,
+            subtotal: i.harga * i.qty,
+            menu_item: { nama_menu: i.nama_menu },
+          })),
+        };
+
+        try {
+          localStorage.setItem(`zcorner_order_${orderId}`, JSON.stringify(fullOrderObj));
+          localStorage.setItem('zcorner_last_order_data', JSON.stringify(fullOrderObj));
+        } catch {}
+
         setCart(null);
         router.push(`/orders/${orderId}`);
       } else {
