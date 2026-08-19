@@ -35,43 +35,36 @@ export default function CartPage() {
 
   async function checkout() {
     setErr('');
-    if (!meja.trim()) { setErr('Nomor meja wajib diisi'); return; }
     if (!customerName.trim()) { setErr('Nama pemesan wajib diisi'); return; }
+    if (!meja.trim()) { setErr('Nomor meja wajib diisi'); return; }
     if (!cart || !cart.items.length) return;
 
     setLoading(true);
     try {
-      const appscriptUrl = process.env.NEXT_PUBLIC_APPSCRIPT_URL;
-      if (!appscriptUrl) {
-        throw new Error('URL Backend Google Apps Script belum dikonfigurasi di .env');
-      }
-
-      // Payload disesuaikan agar masuk ke WebOrders (Notifikasi Order Admin)
-      const res = await fetch(appscriptUrl, {
+      const res = await fetch('/api/orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'createOrder', // KUNCI UTAMA: Ubah jadi createOrder agar masuk ke WebOrders
-          tenant: cart.tenant_name,
+          tenant_name: cart.tenant_name,
           customer_name: customerName,
           nomor_meja: meja,
           items: cart.items.map((i) => ({
+            menu_item_id: i.menu_item_id,
             nama_menu: i.nama_menu,
             qty: i.qty,
             harga: i.harga,
-            subtotal: i.harga * i.qty,
           })),
         }),
       });
 
-      const data = await res.json();
-
-      if (data.success) {
-        const orderId = data.orderId || ('ORD-' + Date.now());
+      if (res.ok) {
+        const data = await res.json();
+        const orderId = data.orderId || data.id || ('ORD-' + Date.now());
         setCart(null);
         router.push(`/orders/${orderId}`);
       } else {
-        setErr(data.error || data.message || 'Gagal membuat pesanan');
+        const text = await res.text();
+        setErr(text || 'Gagal membuat pesanan');
       }
     } catch (e: any) {
       console.error('Checkout error:', e);
