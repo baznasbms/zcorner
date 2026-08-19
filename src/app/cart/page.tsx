@@ -9,7 +9,7 @@ import Link from 'next/link';
 export default function CartPage() {
   const [cart, setC] = useState<Cart | null>(null);
   const [meja, setMeja] = useState('');
-  const [customerName, setCustomerName] = useState(''); // New state for customer name
+  const [customerName, setCustomerName] = useState('');
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -36,126 +36,109 @@ export default function CartPage() {
   async function checkout() {
     setErr('');
     if (!meja.trim()) { setErr('Nomor meja wajib diisi'); return; }
-    if (!customerName.trim()) { setErr('Nama pembeli wajib diisi'); return; } // New validation
-    if (!cart?.items.length) { setErr('Keranjang kosong'); return; }
+    if (!customerName.trim()) { setErr('Nama pemesan wajib diisi'); return; }
+    if (!cart || !cart.items.length) return;
+
     setLoading(true);
+    try {
+      const appscriptUrl = process.env.NEXT_PUBLIC_APPSCRIPT_URL;
+      if (!appscriptUrl) {
+        throw new Error('URL Backend Google Apps Script belum dikonfigurasi di .env');
+      }
 
-    const total = cartTotal(cart);
-    const res = await fetch('/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'createOrder', // New: specify action for Apps Script
-        customer_name: customerName.trim(), // New: send customer name
-        tenant_id: cart.tenant_id,
-        tenant_name: cart.tenant_name,
-        nomor_meja: meja.trim(),
-        total_harga: total,
-        items: cart.items.map((i) => ({
-          nama_menu: i.nama_menu,
-          harga: i.harga,
-          qty: i.qty,
-          total: i.harga * i.qty, // Ensure total is sent per item
-        })),
-      }),
-    });
+      // Payload disesuaikan agar masuk ke WebOrders (Notifikasi Order Admin)
+      const res = await fetch(appscriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'createOrder', // KUNCI UTAMA: Ubah jadi createOrder agar masuk ke WebOrders
+          tenant: cart.tenant_name,
+          customer_name: customerName,
+          nomor_meja: meja,
+          items: cart.items.map((i) => ({
+            nama_menu: i.nama_menu,
+            qty: i.qty,
+            harga: i.harga,
+            subtotal: i.harga * i.qty,
+          })),
+        }),
+      });
 
-    setLoading(false);
-    if (!res.ok) { setErr(await res.text()); return; }
-    const o = await res.json();
-    const orderId = String(o.id || o.orderId);
+      const data = await res.json();
 
-    // Cache data order lengkap di localStorage agar halaman tracking bisa baca
-    localStorage.setItem('zcorner_last_order', orderId);
-    localStorage.setItem('zcorner_last_order_data', JSON.stringify({
-      id: orderId,
-      tenant_name: cart.tenant_name,
-      nomor_meja: meja.trim(),
-      total_harga: total,
-      created_at: new Date().toISOString(),
-      items: cart.items.map((i) => ({
-        qty: i.qty,
-        subtotal: i.harga * i.qty,
-        menu_item: { nama_menu: i.nama_menu },
-      })),
-    }));
-    localStorage.setItem(`zcorner_order_${orderId}`, JSON.stringify({
-      id: orderId,
-      nomor_meja: meja.trim(),
-      status: 'diterima',
-      total_harga: total,
-      metode_bayar: 'COD',
-      payment_status: 'belum_lunas',
-      created_at: new Date().toISOString(),
-      tenant: { nama_tenant: cart.tenant_name },
-      items: cart.items.map((i) => ({
-        qty: i.qty,
-        subtotal: i.harga * i.qty,
-        menu_item: { nama_menu: i.nama_menu },
-      })),
-    }));
-
-    setCart(null);
-    router.push(`/orders/${orderId}`);
+      if (data.success) {
+        const orderId = data.orderId || ('ORD-' + Date.now());
+        setCart(null);
+        router.push(`/orders/${orderId}`);
+      } else {
+        setErr(data.error || data.message || 'Gagal membuat pesanan');
+      }
+    } catch (e: any) {
+      console.error('Checkout error:', e);
+      setErr(e.message || 'Gagal terhubung ke server');
+    } finally {
+      setLoading(false);
+    }
   }
 
-  if (!cart?.items.length) {
+  if (!cart || !cart.items.length) {
     return (
-      <main className="mx-auto max-w-lg min-h-screen flex flex-col items-center justify-center pb-24 px-6 text-center">
-        <div className="text-7xl mb-4">🛒</div>
-        <h1 className="text-2xl font-extrabold text-slate-800">Keranjang masih kosong</h1>
-        <p className="mt-2 text-slate-500">Yuk pilih menu dari tenant favoritmu!</p>
-        <Link href="/" className="btn mt-6">Browse Tenant</Link>
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4">
+        <div className="text-center space-y-3">
+          <div className="text-5xl">🛒</div>
+          <h1 className="text-xl font-bold text-slate-800">Keranjang Kosong</h1>
+          <p className="text-slate-500 text-sm">Pilih menu favoritmu terlebih dahulu</p>
+          <Link href="/" className="btn inline-block mt-4">
+            Lihat Tenant
+          </Link>
+        </div>
         <BottomNav />
-      </main>
+      </div>
     );
   }
 
   const total = cartTotal(cart);
 
   return (
-    <main className="mx-auto min-h-screen max-w-lg bg-slate-50 pb-28">
-      {/* ── Header ─────────────────────────────────── */}
-      <header className="sticky top-0 z-10 bg-white border-b border-slate-100 px-4 py-4 flex items-center gap-3 shadow-sm">
-        <Link href="/" className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 transition">
-          ←
-        </Link>
-        <div>
-          <h1 className="text-lg font-extrabold">Keranjang</h1>
-          <p className="text-xs text-slate-500">{cart.tenant_name}</p>
-        </div>
+    <div className="min-h-screen bg-slate-50 pb-28">
+      {/* ── Top Bar ────────────────────────────── */}
+      <header className="sticky top-0 bg-white/90 backdrop-blur border-b border-slate-100 z-30 px-4 py-3 flex items-center justify-between">
+        <button onClick={() => router.back()} className="text-slate-600 font-semibold text-sm">
+          ← Kembali
+        </button>
+        <h1 className="font-bold text-slate-800 text-base">Keranjang Pesanan</h1>
+        <div className="w-12"></div>
       </header>
 
-      <div className="px-4 pt-5 space-y-4">
-        {/* ── Item List ───────────────────────────── */}
-        <div className="space-y-3">
+      <main className="p-4 space-y-4 max-w-lg mx-auto">
+        {/* ── Tenant Info ───────────────────────── */}
+        <div className="card p-4 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-400 font-medium">Pesanan untuk Tenant</p>
+            <p className="font-bold text-slate-800">{cart.tenant_name}</p>
+          </div>
+          <span className="badge badge-success">COD Meja</span>
+        </div>
+
+        {/* ── Items List ────────────────────────── */}
+        <div className="card divide-y divide-slate-100">
           {cart.items.map((item) => (
-            <div key={item.menu_item_id} className="card flex items-center gap-3 p-3 animate-fade-in">
-              {item.foto_menu ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.foto_menu} alt={item.nama_menu} className="h-16 w-16 rounded-2xl object-cover shrink-0" />
-              ) : (
-                <div className="h-16 w-16 rounded-2xl bg-go-50 flex items-center justify-center text-2xl shrink-0">🍽️</div>
-              )}
+            <div key={item.menu_item_id} className="p-4 flex items-center justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm leading-snug truncate">{item.nama_menu}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{money(item.harga)} / porsi</p>
-                <p className="text-sm font-bold text-go-600 mt-0.5">{money(item.harga * item.qty)}</p>
+                <h3 className="font-semibold text-slate-800 text-sm truncate">{item.nama_menu}</h3>
+                <p className="text-xs text-go-600 font-bold mt-0.5">{money(item.harga)}</p>
               </div>
-              {/* Qty Stepper */}
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
                 <button
                   onClick={() => changeQty(item.menu_item_id, -1)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition"
-                  id={`qty-minus-${item.menu_item_id}`}
+                  className="w-7 h-7 rounded bg-white font-bold text-slate-700 shadow-sm flex items-center justify-center active:scale-95"
                 >
-                  −
+                  -
                 </button>
-                <span className="w-5 text-center font-bold">{item.qty}</span>
+                <span className="w-6 text-center font-bold text-slate-800 text-sm">{item.qty}</span>
                 <button
                   onClick={() => changeQty(item.menu_item_id, 1)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-go-500 text-white font-bold hover:bg-go-600 transition"
-                  id={`qty-plus-${item.menu_item_id}`}
+                  className="w-7 h-7 rounded bg-white font-bold text-slate-700 shadow-sm flex items-center justify-center active:scale-95"
                 >
                   +
                 </button>
@@ -164,45 +147,33 @@ export default function CartPage() {
           ))}
         </div>
 
-        {/* ── COD Banner ──────────────────────────── */}
-        <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50 p-4 flex gap-3">
-          <span className="text-2xl shrink-0">💵</span>
-          <div>
-            <p className="font-bold text-amber-900 text-sm">Bayar di Tempat (COD)</p>
-            <p className="text-xs text-amber-700 mt-0.5">Pembayaran dilakukan ke pelayan/kasir saat makanan diantar ke meja. Tidak ada pembayaran online.</p>
-          </div>
-        </div>
-
-        {/* ── Nama Pembeli ──────────────────────────── */}
-        <div className="card p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">👤</span>
-            <label htmlFor="customer-name" className="font-bold text-slate-800">Nama Pembeli <span className="text-red-500">*</span></label>
-          </div>
+        {/* ── Customer Name Input ──────────────── */}
+        <div className="card p-4 space-y-2">
+          <label className="block text-sm font-bold text-slate-700">
+            Nama Pemesan <span className="text-red-500">*</span>
+          </label>
           <input
-            id="customer-name"
-            className={`input text-lg font-bold tracking-wider ${err && !customerName ? 'border-red-400 ring-2 ring-red-200' : ''}`}
-            placeholder="Contoh: Budi, Meja 12A"
+            type="text"
+            className={`input w-full ${err && !customerName ? 'border-red-400 ring-2 ring-red-200' : ''}`}
+            placeholder="Masukkan nama Anda"
             value={customerName}
             onChange={(e) => { setCustomerName(e.target.value); setErr(''); }}
           />
-          {err && !customerName && <p className="text-sm text-red-600 font-medium">⚠️ {err}</p>}
         </div>
 
-        {/* ── Nomor Meja ──────────────────────────── */}
-        <div className="card p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">🪑</span>
-            <label htmlFor="nomor-meja" className="font-bold text-slate-800">Nomor Meja <span className="text-red-500">*</span></label>
-          </div>
+        {/* ── Table Input ───────────────────────── */}
+        <div className="card p-4 space-y-2">
+          <label className="block text-sm font-bold text-slate-700">
+            Nomor Meja <span className="text-red-500">*</span>
+          </label>
           <input
-            id="nomor-meja"
-            className={`input text-lg font-bold tracking-wider ${err && !meja ? 'border-red-400 ring-2 ring-red-200' : ''}`}
+            type="text"
+            className={`input w-full uppercase font-bold tracking-wider ${err && !meja ? 'border-red-400 ring-2 ring-red-200' : ''}`}
             placeholder="Contoh: A12, Meja 5, B-03"
             value={meja}
             onChange={(e) => { setMeja(e.target.value); setErr(''); }}
           />
-          {err && !meja && <p className="text-sm text-red-600 font-medium">⚠️ {err}</p>}
+          {err && <p className="text-sm text-red-600 font-medium mt-1">⚠️ {err}</p>}
         </div>
 
         {/* ── Order Summary ─────────────────────── */}
@@ -227,15 +198,11 @@ export default function CartPage() {
           disabled={loading}
           onClick={checkout}
         >
-          {loading ? (
-            <><span className="animate-spin">⏳</span> Mengirim pesanan...</>
-          ) : (
-            <>🛒 Pesan Sekarang · {money(total)}</>
-          )}
+          {loading ? 'Mengirim Pesanan...' : 'Pesan Sekarang (COD)'}
         </button>
-      </div>
+      </main>
 
       <BottomNav />
-    </main>
+    </div>
   );
 }
