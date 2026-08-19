@@ -151,9 +151,6 @@ export default function HomePage() {
             <div className="p-4">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-sm text-slate-500 line-clamp-2 flex-1">{t.deskripsi}</p>
-                <span className="shrink-0 rounded-xl bg-amber-50 border border-amber-100 px-2.5 py-1.5 text-sm font-bold text-amber-600">
-                  ★ {t.rating}
-                </span>
               </div>
               <div className="mt-3 flex items-center gap-3 text-xs text-slate-400">
                 <span>⏰ {t.jam_buka}</span>
