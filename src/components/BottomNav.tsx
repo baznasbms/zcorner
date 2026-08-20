@@ -4,11 +4,13 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { getCart } from '@/lib/cart';
 
+const TENANT_URL = 'https://zcorner-chi.vercel.app';
+
 const NAV = [
   { href: '/',          icon: '🏠', label: 'Home' },
   { href: '/cart',      icon: '🛒', label: 'Keranjang' },
   { href: '/orders/latest', icon: '📋', label: 'Pesanan' },
-  { href: '/admin/login', icon: '🏪', label: 'Tenant' },
+  { href: TENANT_URL,   icon: '🏪', label: 'Tenant' },
 ];
 
 export function BottomNav() {
