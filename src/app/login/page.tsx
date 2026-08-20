@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbyDChjat_7ZUHuDglXh2U4cSRg2p-Rv8Sob38ijZO3h0kNMlGG2p_WHCsA5Q_rKy5CX/exec';
+const GAS_URL = 'zcorner-chi.vercel.app';
 
 export default function LoginPage() {
   useEffect(() => {
